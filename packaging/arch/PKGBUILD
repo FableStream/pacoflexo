@@ -1,7 +1,7 @@
 # Maintainer: FableStream <https://github.com/FableStream>
 #
 # Generic Arch packaging for pacoflexo, suitable for the AUR: it builds the
-# tagged release tarball from GitHub. When publishing, run `updpkgsums` to pin
+# tagged release tarball from GitHub. On a version bump, run `updpkgsums` to pin
 # the tarball checksum and regenerate .SRCINFO with
 # `makepkg --printsrcinfo > .SRCINFO`.
 
@@ -22,7 +22,7 @@ source=(
   pacoflexo.tmpfiles
   config.toml
 )
-sha256sums=('SKIP'
+sha256sums=('81417b5d8e74e08b26d3c8c628fa674ef0a0f4c35d17ed7a6d42d63474c4463e'
             '875b314bbc31706047b14c6049437a126475e2e924cdce13812bce46e4fdd23b'
             '6ea4efb828c819a6b8f78cd7d04795ff1f1827bc56405e112946aae22ed5351d'
             'e32af498bbc8f215e92748e9de7c278fbd6d7c47fdd67aee7b436d5fe0b979bf'
