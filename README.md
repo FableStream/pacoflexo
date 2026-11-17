@@ -112,6 +112,27 @@ On every `refresh_interval_secs`, pacoflexo:
 3. optionally prefetches: for every package a client requested in the last
    `max_age_days`, it downloads the current version if that isn't cached yet.
 
+The time each cached file was last requested is saved in
+`state_dir/access.json`, so it survives restarts.
+
+#### What happens to packages a machine stops using
+
+pacoflexo doesn't know what is installed on your machines; it only sees
+requests. Packages leave the cache in two ways:
+
+- **Superseded versions** go as soon as they fall outside `keep_versions`,
+  whether or not some machine still has them installed.
+- **Packages nobody asks for any more** go after `unaccessed_days` without a
+  request. If you uninstall something everywhere, nothing requests it again
+  and it ages out. A package that was dropped from the repositories is kept in
+  its last version until it, too, goes unrequested for that long, so machines
+  that still have it can reinstall it in the meantime.
+
+A machine that stays offline for longer than `unaccessed_days` simply
+downloads again whatever was dropped the next time it upgrades. Set
+`unaccessed_days = 0` to turn age-based removal off and rely on version
+retention alone.
+
 ### Seeding from an existing cache
 
 Most hosts that run pacoflexo already have a pacman cache full of packages.
@@ -143,6 +164,33 @@ independent: pacman can download, clean or partially write its cache at any
 time without affecting pacoflexo. The packaged systemd unit also marks
 `/var/cache/pacman/pkg` read-only, so the kernel enforces this.
 
+#### Filesystems and disk space
+
+How cheap seeding is depends on the filesystem under `cache_dir` and the seed
+directory:
+
+| Filesystem | Import method | Extra disk space |
+|---|---|---|
+| btrfs, or XFS with `reflink=1` (the mkfs default) | Reflink: the copy shares data blocks with the original | None until one of the two files changes |
+| ext4, or different filesystems for `cache_dir` and seed | Plain copy | One extra copy of every seeded package |
+
+A hardlink is tried between the two. In practice it only succeeds when
+pacoflexo runs as the owner of the seed files outside the packaged unit: with
+the default `fs.protected_hardlinks=1`, the `pacoflexo` user may not link
+root-owned pacman files, and the unit's read-only mount of
+`/var/cache/pacman/pkg` is a separate mount, which hardlinks can't cross. The
+verification is the same in every case, because the imported file is what
+gets checked.
+
+On ext4, `scan_on_start = true` copies roughly all current packages from the
+seed directory at startup, which doubles their disk use. If space is tight:
+
+1. keep `scan_on_start = false`, so only packages a client actually requests
+   are copied, on first request;
+2. point the host's own pacman at pacoflexo (see below) and keep pacman's own
+   cache small, e.g. with `paccache -rk1`. pacoflexo then holds the one large
+   cache, and pacman's is just a staging area.
+
 Tip: point the host's own pacman at pacoflexo as well
 (`Server = http://127.0.0.1:9129/repo/archlinux/$repo/os/$arch` at the top of
 `/etc/pacman.d/mirrorlist`). The host then benefits from the shared,
@@ -160,9 +208,10 @@ Both styles work on every listen address. `pacoloco_prefixes` sets which
 `<name>` values are accepted in `/repo/<name>/…` (default `archlinux`). Any
 repository name is proxied, but only `repos` get background db refreshes.
 
-`GET /status` returns JSON with cache size, hits, misses, db fetches,
-verification failures, upstream errors, in-flight downloads, index sizes and
-the current mirror ranking.
+`GET /status` returns JSON with cache size, hits, misses, db fetches, seed
+hits and rejects, verification failures, upstream errors, in-flight downloads,
+index sizes and the current mirror ranking. It reports aggregate numbers only:
+no package names and nothing about individual clients.
 
 ## Configuration
 
@@ -223,6 +272,76 @@ From source: `cargo build --release --locked`, then run
    `/var/cache/pacman/pkg`.
 6. If you used pacoloco's prefetch, set `[prefetch] enabled = true`. Prefetch
    then follows what your clients request through pacoflexo from that point on.
+
+To check the switch, from any client:
+
+```sh
+sudo pacman -Syy                                    # databases through the proxy
+d=$(mktemp -d)
+sudo pacman -Sw --noconfirm --cachedir "$d" <some package>   # download through the proxy
+for f in "$d"/*.pkg.tar.zst; do pacman-key --verify "$f.sig" "$f"; done
+curl -s http://cache.example.lan:9129/status        # hits, misses, seed_hits
+```
+
+and check that `curl -sI http://cache.example.lan:7878/core/os/x86_64/core.db`
+answers `200` for flexo-style clients. With `scan_on_start`, the journal
+(`journalctl -u pacoflexo`) shows each seeded file and how it was imported
+(`Reflink`, `Hardlink` or `Copy`).
+
+To roll back: `systemctl disable --now pacoflexo && systemctl enable --now
+flexo pacoloco`. pacoflexo never touched their caches.
+
+## Roadmap
+
+Planned for 0.1.2. Every feature below can be switched on or off on its own
+in `/etc/pacoflexo/config.toml`. With all of them off, pacoflexo behaves
+exactly like 0.1.1, and host tracking stays off until you enable it.
+
+- **Cache statistics:** bytes served from cache versus fetched upstream, hit
+  ratio, per-repository cache size, and an optional Prometheus `/metrics`
+  endpoint.
+- **Knowing which machine asked:** clients can be identified by a name in
+  their mirror URL (`Server = http://cache.example.lan:9129/h/<name>/repo/archlinux/$repo/os/$arch`)
+  or by IP address. From the downloads alone, pacoflexo works out which
+  version of each package a machine most likely has installed, so retention
+  can keep the versions that recently seen machines are still running, and
+  forget machines that haven't been seen for a while.
+- **Full upgrades, defined by you:** a database fetch and the downloads that
+  follow it form a session. Whether a session was a full upgrade
+  (`pacman -Syu`) is decided by rules in the config, for example:
+
+  ```toml
+  [[hosts.full_upgrade]]
+  name = "many unrelated packages"
+  min_unrelated = 10      # clusters with nothing in common
+
+  [[hosts.full_upgrade]]
+  name = "kernel plus a large batch"
+  any_of = ["linux", "linux-lts", "linux-zen", "linux-hardened"]
+  min_packages = 20
+  ```
+
+  A session is a full upgrade if any rule matches; every condition you set
+  inside a rule must hold. Which packages count as related (shared pkgbase,
+  group, dependency or provides) is configurable too, and a dry-run command
+  explains which rule matched and why before you let any of it affect
+  retention.
+- **An optional client hook:** a small pacman hook that reports a machine's
+  installed packages after each transaction, for exact retention instead of
+  inference.
+
+Privacy is a hard requirement for all of this: **which packages are on which
+machine is never exposed over the network.** `/status` and `/metrics` will
+only ever show aggregate counts, with no package names, no package labels, and
+machine names hidden unless you opt in. Per-machine details are available
+only to root on the cache host, through a local Unix socket and the
+`pacoflexo` command. State files are readable only by the service, and
+package names reach the logs only at debug level.
+
+Any shared cache answers faster for files it already has, so in principle a
+client could time requests to guess what is cached. For people who use
+pacoflexo purely as an offline cache, an opt-in `uniform_speed` mode will
+serve every response at the same configured rate. It is off by default.
 
 ## Development
 
