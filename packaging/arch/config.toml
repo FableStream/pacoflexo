@@ -1,0 +1,37 @@
+# pacoflexo configuration. All keys are optional; see
+# /usr/share/doc/pacoflexo/config.example.toml for every option.
+
+# 9129 serves pacoloco-style clients, 7878 flexo-style clients (both URL
+# styles work on both ports).
+listen = ["0.0.0.0:9129", "0.0.0.0:7878"]
+
+# Owned by pacoflexo alone. Never use /var/cache/pacman/pkg here.
+cache_dir = "/var/cache/pacoflexo"
+state_dir = "/var/lib/pacoflexo"
+
+pacoloco_prefixes = ["archlinux"]
+repos = ["core", "extra", "multilib"]
+arches = ["x86_64"]
+db_ttl_secs = 60
+refresh_interval_secs = 900
+startup_scan = "full"
+
+[mirrors]
+urls = ["https://geo.mirror.pkgbuild.com/"]
+use_status_json = true
+countries = []
+max_candidates = 20
+latency_rank = true
+
+[verify]
+signatures = true
+keyring = "/usr/share/pacman/keyrings/archlinux.gpg"
+revoked = "/usr/share/pacman/keyrings/archlinux-revoked"
+
+[retention]
+keep_versions = 1
+unaccessed_days = 30
+
+[prefetch]
+enabled = false
+max_age_days = 30

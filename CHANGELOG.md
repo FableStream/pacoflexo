@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `packaging/arch/`: AUR-style PKGBUILD (GitHub release tarball), hardened
+  systemd unit, sysusers/tmpfiles entries and default config.
+
+### Fixed
+
+- `unreachable_code` warning with newer Rust toolchains.
+
 ## [0.1.0] - 2026-11-17
 
 ### Added

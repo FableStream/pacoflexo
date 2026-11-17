@@ -1,0 +1,25 @@
+pkgbase = pacoflexo
+	pkgdesc = Verifying caching proxy for Arch Linux package repositories (flexo + pacoloco in one)
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/FableStream/pacoflexo
+	arch = x86_64
+	arch = aarch64
+	license = MIT OR Apache-2.0
+	makedepends = cargo
+	depends = libgcc
+	depends = glibc
+	depends = archlinux-keyring
+	backup = etc/pacoflexo/config.toml
+	source = pacoflexo-0.1.0.tar.gz::https://github.com/FableStream/pacoflexo/archive/refs/tags/v0.1.0.tar.gz
+	source = pacoflexo.service
+	source = pacoflexo.sysusers
+	source = pacoflexo.tmpfiles
+	source = config.toml
+	sha256sums = SKIP
+	sha256sums = 321dab0dbc3fe2ae4722b22d1cd578745a71cbc264f45d3c28db639e117e7118
+	sha256sums = 6ea4efb828c819a6b8f78cd7d04795ff1f1827bc56405e112946aae22ed5351d
+	sha256sums = e32af498bbc8f215e92748e9de7c278fbd6d7c47fdd67aee7b436d5fe0b979bf
+	sha256sums = 22067b0e612094db1da0104e15ec3fa64717f11ac5ecb0d8f13c156a5da08a1c
+
+pkgname = pacoflexo

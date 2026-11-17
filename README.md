@@ -158,7 +158,8 @@ Logging uses `tracing`; set `RUST_LOG=debug` for more detail.
 ## Installing
 
 On Arch, build the package from [`packaging/arch/`](packaging/arch/) with
-`makepkg -si`. It installs a hardened systemd unit, a dedicated `pacoflexo`
+`makepkg -si`. That PKGBUILD builds the tagged GitHub release and is suitable
+for the AUR. It installs a hardened systemd unit, a dedicated `pacoflexo`
 user, `/var/cache/pacoflexo`, `/var/lib/pacoflexo`, and a default
 `/etc/pacoflexo/config.toml` (kept across upgrades).
 

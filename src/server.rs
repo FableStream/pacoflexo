@@ -32,7 +32,7 @@ async fn serve_file(path: PathBuf, req: Request) -> Response {
         .await
     {
         Ok(r) => r.map(Body::new),
-        Err(e) => plain(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+        Err(never) => match never {},
     }
 }
 
