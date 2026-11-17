@@ -1,0 +1,57 @@
+# pacoflexo example configuration (/etc/pacoflexo/config.toml).
+# Every key is optional; the values shown are the defaults unless noted.
+
+# Serve both the pacoloco port and the flexo port (default: ["0.0.0.0:9129"]).
+listen = ["0.0.0.0:9129", "0.0.0.0:7878"]
+
+# Owned exclusively by pacoflexo. Never share it with /var/cache/pacman/pkg.
+cache_dir = "/var/cache/pacoflexo"
+state_dir = "/var/lib/pacoflexo"
+
+# Accepted <name> in pacoloco-style URLs: /repo/<name>/$repo/os/$arch
+pacoloco_prefixes = ["archlinux"]
+
+# Repositories whose databases are kept fresh in the background (verification,
+# retention, prefetch). Requests for other repos are still proxied.
+repos = ["core", "extra", "multilib"]
+arches = ["x86_64"]
+
+# Seconds a cached .db/.files is served before revalidating upstream.
+db_ttl_secs = 60
+# Background db refresh + retention + prefetch cycle.
+refresh_interval_secs = 900
+# "full" = size + sha256/signature of every cached file, "size", or "off".
+startup_scan = "full"
+
+[mirrors]
+# Base URLs or mirrorlist-style templates with $repo/$arch.
+urls = [
+  "https://geo.mirror.pkgbuild.com/",
+  "https://mirror.example.org/archlinux/$repo/os/$arch",
+]
+# Add candidates from the Arch mirror status JSON (https only, fully synced).
+use_status_json = true
+status_url = "https://archlinux.org/mirrors/status/json/"
+countries = []          # e.g. ["GB", "DE"]
+max_candidates = 20
+# Rank everything by measured latency; false keeps the urls order above.
+latency_rank = true
+rank_interval_secs = 21600
+connect_timeout_secs = 5
+read_timeout_secs = 30
+
+[verify]
+signatures = true
+keyring = "/usr/share/pacman/keyrings/archlinux.gpg"
+revoked = "/usr/share/pacman/keyrings/archlinux-revoked"
+
+[retention]
+# Previous versions kept per package in addition to the current one.
+keep_versions = 1
+# Delete packages nobody requested for this many days (0 = never).
+unaccessed_days = 30
+
+[prefetch]
+# Download new versions of packages clients requested recently.
+enabled = false
+max_age_days = 30
