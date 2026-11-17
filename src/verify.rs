@@ -216,8 +216,11 @@ mod tests {
         );
     }
 
-    /// Checks against the real Arch keyring and pacman's own cache, when present.
+    /// Checks against the real Arch keyring and pacman's own cache. Opt-in
+    /// (`cargo test -- --ignored`): build hosts may cache packages signed by
+    /// keys outside the Arch keyring.
     #[test]
+    #[ignore]
     fn real_arch_package_if_available() {
         let keyring = Path::new("/usr/share/pacman/keyrings/archlinux.gpg");
         let Ok(dir) = std::fs::read_dir("/var/cache/pacman/pkg") else {
