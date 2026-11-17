@@ -1,6 +1,6 @@
 pkgbase = pacoflexo
 	pkgdesc = Verifying caching proxy for Arch Linux package repositories (flexo + pacoloco in one)
-	pkgver = 0.1.1
+	pkgver = 0.1.2
 	pkgrel = 1
 	url = https://github.com/FableStream/pacoflexo
 	arch = x86_64
@@ -11,7 +11,7 @@ pkgbase = pacoflexo
 	depends = glibc
 	depends = archlinux-keyring
 	backup = etc/pacoflexo/config.toml
-	source = pacoflexo-0.1.1.tar.gz::https://github.com/FableStream/pacoflexo/archive/refs/tags/v0.1.1.tar.gz
+	source = pacoflexo-0.1.2.tar.gz::https://github.com/FableStream/pacoflexo/archive/refs/tags/v0.1.2.tar.gz
 	source = pacoflexo.service
 	source = pacoflexo.sysusers
 	source = pacoflexo.tmpfiles

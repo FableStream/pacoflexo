@@ -1,4 +1,6 @@
 use clap::Parser;
+use std::ffi::OsStr;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
@@ -20,12 +22,23 @@ async fn main() {
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,pgp=error")),
         )
+        .with_ansi(use_ansi(
+            std::env::var_os("NO_COLOR").as_deref(),
+            std::io::stdout().is_terminal(),
+        ))
         .init();
     let args = Args::parse();
     if let Err(e) = run(args).await {
         tracing::error!("{e}");
         std::process::exit(1);
     }
+}
+
+/// Colour the log output only when it goes to a terminal (not the systemd
+/// journal, a pipe or a file) and `NO_COLOR` is unset or empty
+/// (<https://no-color.org>).
+fn use_ansi(no_color: Option<&OsStr>, is_terminal: bool) -> bool {
+    is_terminal && no_color.is_none_or(|v| v.is_empty())
 }
 
 async fn run(args: Args) -> Result<(), String> {
@@ -70,5 +83,21 @@ async fn shutdown() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
         _ = term.recv() => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::use_ansi;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn ansi_only_on_a_terminal_without_no_color() {
+        assert!(use_ansi(None, true));
+        assert!(!use_ansi(None, false));
+        assert!(!use_ansi(Some(OsStr::new("1")), true));
+        assert!(!use_ansi(Some(OsStr::new("1")), false));
+        // An empty NO_COLOR does not disable colour.
+        assert!(use_ansi(Some(OsStr::new("")), true));
     }
 }

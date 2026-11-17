@@ -293,9 +293,9 @@ flexo pacoloco`. pacoflexo never touched their caches.
 
 ## Roadmap
 
-Planned for 0.1.2. Every feature below can be switched on or off on its own
+Planned for 0.2.0. Every feature below can be switched on or off on its own
 in `/etc/pacoflexo/config.toml`. With all of them off, pacoflexo behaves
-exactly like 0.1.1, and host tracking stays off until you enable it.
+exactly like 0.1.2, and host tracking stays off until you enable it.
 
 - **Cache statistics:** bytes served from cache versus fetched upstream, hit
   ratio, per-repository cache size, and an optional Prometheus `/metrics`

@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Planned for 0.2.0: cache statistics, per-machine retention, configurable
+full-upgrade detection, an optional shared cache with the host's pacman and
+an optional client hook. See the Roadmap section of the README.
+
+## [0.1.2] - 2026-11-17
+
+### Fixed
+
+- Log output no longer contains ANSI colour escape codes when it does not go
+  to a terminal (for example in the systemd journal). `NO_COLOR` is honoured
+  as well.
+
+### Documentation
+
+- README: retention of unused packages, filesystem notes for seeding
+  (reflinks, hardlinks, copies), migration checks, and a roadmap for 0.2.0,
+  including a shared cache mode and why upgrade ordering matters there.
+
 ## [0.1.1] - 2026-11-17
 
 ### Added
