@@ -326,6 +326,25 @@ exactly like 0.1.1, and host tracking stays off until you enable it.
   group, dependency or provides) is configurable too, and a dry-run command
   explains which rule matched and why before you let any of it affect
   retention.
+- **A shared cache with the host's pacman (`cache_mode = "shared"`, off by
+  default):** for ext4 hosts, or anyone who wants exactly one cache
+  directory. pacoflexo serves straight from `/var/cache/pacman/pkg`,
+  verifies every file before it first serves it, re-verifies it whenever it
+  changes on disk, writes its own downloads atomically, and deletes only files
+  it created itself. You accept small, harmless races with the host's pacman
+  (the same package downloaded twice, a file cleaned up mid-transfer), and the
+  service needs write access to the directory through a `pacoflexo` group.
+
+  **Upgrade ordering matters in this mode:**
+  1. upgrade the cache host first, with its pacman pointed at pacoflexo, then
+     the clients;
+  2. the host's `archlinux-keyring` must be current before pacoflexo can
+     verify packages from new packagers (upgrading the host first takes care
+     of this);
+  3. run `paccache` / `pacman -Sc` on the host only after the clients have
+     upgraded, or it deletes versions they are about to fetch;
+  4. upgrading pacoflexo itself restarts the service, so do it while clients
+     are idle.
 - **An optional client hook:** a small pacman hook that reports a machine's
   installed packages after each transaction, for exact retention instead of
   inference.
