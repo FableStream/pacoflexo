@@ -165,7 +165,7 @@ async fn status(State(st): State<Arc<AppState>>) -> Json<serde_json::Value> {
         "verification_failures": ld(&s.verification_failures),
         "scrubbed": ld(&s.scrubbed),
         "inflight": st.inflight.lock().unwrap().len(),
-        "signatures": st.keyring.as_ref().map(|k| k.len()),
+        "signing_keys": st.keyring().map(|k| k.len()),
         "repos": repos,
         "mirrors": mirrors,
     }))

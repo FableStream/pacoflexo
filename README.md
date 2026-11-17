@@ -86,9 +86,9 @@ database to keep in sync. pacoflexo loads `archlinux.gpg` from the
 `archlinux-keyring` package and leaves out every key listed in
 `archlinux-revoked`. It accepts a signature from any remaining key. This is the
 same trust model as `sqv --keyring archlinux.gpg`. Because the keyring comes
-from a signed package, it contains only Arch master and packager keys. Restart
-pacoflexo after `archlinux-keyring` updates; the packaged systemd unit does not
-restart it automatically.
+from a signed package, it contains only Arch master and packager keys. When
+`archlinux-keyring` is upgraded on the host, pacoflexo notices that the files
+changed and reloads them before its next verification, without a restart.
 
 ### Mirrors
 

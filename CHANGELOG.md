@@ -13,7 +13,8 @@ All notable changes to this project are documented here. The format follows
   (`/$repo/os/$arch/<file>`) URLs, on any number of listen addresses.
 - Package verification before caching: size and sha256 against the sync
   database, detached OpenPGP signature against the Arch keyring (pure Rust,
-  honoring the revoked-keys list). Atomic `rename()` into the cache.
+  honoring the revoked-keys list, reloaded automatically when the keyring
+  files change). Atomic `rename()` into the cache.
 - Single-flight downloads with streaming to all waiting clients; the last byte
   is held back until verification passes. Transparent resume from the next
   mirror when a transfer breaks off.

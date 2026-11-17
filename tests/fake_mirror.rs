@@ -381,3 +381,36 @@ async fn startup_scrub_drops_bad_files() {
     left.sort();
     assert_eq!(left, vec!["core.db".to_string(), QUX.to_string()]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keyring_is_reloaded_when_it_changes() {
+    let mut env = env().await;
+    let revoked = env.cfg.state_dir.with_file_name("revoked");
+    // Start with the good packager key revoked (the other key stays usable).
+    std::fs::write(&revoked, "FEBA0497432DC1B680BB3AFDE3254378DFF0D791\n").unwrap();
+    env.cfg.verify.revoked = revoked.clone();
+    let (_st, proxy) = start_proxy(env.cfg.clone()).await;
+    let url = format!("{proxy}/{ARCH_DIR}/{BAR}");
+
+    let r = reqwest::get(&url).await.unwrap();
+    assert!(
+        r.bytes().await.is_err(),
+        "must fail while the signer is revoked"
+    );
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(cached(&env.cfg, BAR).is_none());
+
+    // archlinux-keyring upgrade: the revoked list changes on disk.
+    std::fs::write(&revoked, "4E64CB5EB7140DAEA8B53CDF0AE86A508BF4D07F\n").unwrap();
+    let later = std::time::SystemTime::now() + Duration::from_secs(10);
+    std::fs::File::options()
+        .write(true)
+        .open(&revoked)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+
+    let r = reqwest::get(&url).await.unwrap();
+    assert_eq!(r.bytes().await.unwrap(), fixture(BAR));
+    assert_eq!(wait_cached(&env.cfg, BAR).await, fixture(BAR));
+}

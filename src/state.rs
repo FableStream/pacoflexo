@@ -7,7 +7,7 @@ use crate::mirrors::Mirrors;
 use crate::routes::Target;
 use crate::verify::Keyring;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -35,7 +35,9 @@ pub struct AppState {
     pub cfg: Config,
     pub client: reqwest::Client,
     pub mirrors: Mirrors,
-    pub keyring: Option<Arc<Keyring>>,
+    /// Reloaded when the keyring file changes (archlinux-keyring upgrades).
+    keyring: RwLock<Option<Arc<Keyring>>>,
+    keyring_stamp: Mutex<Option<SystemTime>>,
     /// Parsed `<repo>.db` per (repo, arch).
     pub index: RwLock<HashMap<(String, String), Arc<RepoIndex>>>,
     /// Package downloads in progress, by relative path.
@@ -56,7 +58,35 @@ pub fn unix_now() -> u64 {
         .as_secs()
 }
 
+fn keyring_stamp(keyring: &Path, revoked: &Path) -> Option<SystemTime> {
+    let m = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    m(keyring).max(m(revoked))
+}
+
 impl AppState {
+    /// The current keyring (None when signature checks are disabled). Reloads
+    /// it first if the keyring or revoked file changed on disk.
+    pub fn keyring(&self) -> Option<Arc<Keyring>> {
+        let v = &self.cfg.verify;
+        if v.signatures {
+            let now = keyring_stamp(&v.keyring, &v.revoked);
+            let mut stamp = self.keyring_stamp.lock().unwrap();
+            if now.is_some() && now != *stamp {
+                match Keyring::load(&v.keyring, &v.revoked) {
+                    Ok(k) => {
+                        tracing::info!("keyring changed on disk, reloaded");
+                        *self.keyring.write().unwrap() = Some(Arc::new(k));
+                        *stamp = now;
+                    }
+                    Err(e) => {
+                        tracing::warn!("keyring changed but failed to load, keeping old one: {e}")
+                    }
+                }
+            }
+        }
+        self.keyring.read().unwrap().clone()
+    }
+
     pub fn new(cfg: Config) -> Result<AppState, String> {
         let keyring = if cfg.verify.signatures {
             Some(Arc::new(
@@ -83,11 +113,13 @@ impl AppState {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_default();
+        let stamp = keyring_stamp(&cfg.verify.keyring, &cfg.verify.revoked);
         Ok(AppState {
             mirrors: Mirrors::new(&cfg.mirrors, &cfg.state_dir),
             cfg,
             client,
-            keyring,
+            keyring: RwLock::new(keyring),
+            keyring_stamp: Mutex::new(stamp),
             index: RwLock::default(),
             inflight: Mutex::default(),
             db_locks: Mutex::default(),

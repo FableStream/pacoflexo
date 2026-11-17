@@ -325,7 +325,7 @@ pub async fn get_pkg_sig(st: &AppState, t: &Target) -> Fetched {
         Ok(sig) => {
             // Cache it only if it verifies against a package we already hold.
             let pkg_path = path.with_file_name(pkg_file);
-            if let Some(kr) = &st.keyring
+            if let Some(kr) = &st.keyring()
                 && pkg_path.is_file()
                 && verify_blocking(kr, &pkg_path, &sig).await.is_ok()
             {
@@ -526,7 +526,7 @@ async fn attempt(
         }
     }
 
-    let Some(kr) = &st.keyring else {
+    let Some(kr) = &st.keyring() else {
         if expected.is_some() {
             return finish(st, tmp, dest, None, tx).await;
         }

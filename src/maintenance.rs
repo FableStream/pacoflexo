@@ -159,7 +159,7 @@ fn check_package(
     // Not in a current db (older version): needs a verifying signature.
     let sig = std::fs::read(format!("{}.sig", path.display()))
         .map_err(|_| "not in sync db and no signature".to_string())?;
-    match (&st.keyring, full) {
+    match (st.keyring(), full) {
         (Some(kr), true) => kr
             .verify_file(path, &sig)
             .map(|_| ())
