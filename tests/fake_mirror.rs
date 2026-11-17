@@ -134,6 +134,7 @@ fn p(file: &str) -> String {
 struct Env {
     bad: Mirror,
     good: Mirror,
+    good_url: String,
     cfg: Config,
     _dir: tempfile::TempDir,
 }
@@ -182,6 +183,7 @@ async fn env() -> Env {
         ..Default::default()
     };
     cfg.mirrors.urls = vec![format!("{bad_url}/"), format!("{good_url}/")];
+    let good_url = format!("{good_url}/");
     cfg.mirrors.use_status_json = false;
     cfg.mirrors.latency_rank = false;
     cfg.verify.keyring = fx.join("keyring.gpg");
@@ -189,6 +191,7 @@ async fn env() -> Env {
     Env {
         bad,
         good,
+        good_url,
         cfg,
         _dir: dir,
     }
@@ -413,4 +416,128 @@ async fn keyring_is_reloaded_when_it_changes() {
     let r = reqwest::get(&url).await.unwrap();
     assert_eq!(r.bytes().await.unwrap(), fixture(BAR));
     assert_eq!(wait_cached(&env.cfg, BAR).await, fixture(BAR));
+}
+
+// ---------------------------------------------------------------- seed dirs
+
+type Snapshot = Vec<(String, u64, i64, i64, u64)>;
+
+/// (name, size, mtime, mtime_nsec, inode) of every entry in a seed dir.
+fn snapshot(dir: &Path) -> Snapshot {
+    use std::os::unix::fs::MetadataExt;
+    let mut v: Snapshot = std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| {
+            let m = e.metadata().unwrap();
+            (
+                e.file_name().to_string_lossy().into_owned(),
+                m.len(),
+                m.mtime(),
+                m.mtime_nsec(),
+                m.ino(),
+            )
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+/// Seed env: only the good mirror upstream, so upstream use is countable.
+fn seed_env(env: &mut Env) -> PathBuf {
+    let seed = env.cfg.state_dir.with_file_name("seed");
+    std::fs::create_dir_all(&seed).unwrap();
+    env.cfg.mirrors.urls = vec![env.good_url.clone()];
+    env.cfg.seed.dirs = vec![seed.clone()];
+    seed
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn seed_hits_are_verified_and_seed_dir_is_untouched() {
+    let mut env = env().await;
+    let seed = seed_env(&mut env);
+    let foo = fixture(FOO);
+    std::fs::write(seed.join(FOO), &foo).unwrap(); // valid
+    std::fs::write(
+        seed.join(format!("{FOO}.sig")),
+        fixture(&format!("{FOO}.sig")),
+    )
+    .unwrap();
+    std::fs::write(seed.join(QUX), &foo[..1000]).unwrap(); // truncated
+    std::fs::write(seed.join(DROP), b"").unwrap(); // 0-byte
+    std::fs::write(seed.join(format!("{BAR}.part")), fixture(BAR)).unwrap(); // partial download
+    let mut wrong = foo.clone();
+    wrong[10] ^= 1;
+    std::fs::create_dir_all(seed.join("sub")).unwrap();
+    // Same size, wrong bytes, in a second seed dir listed first.
+    let seed2 = seed.join("sub");
+    std::fs::write(seed2.join("qux-1.0-1-x86_64.pkg.tar.zst"), &wrong).unwrap();
+    env.cfg.seed.dirs = vec![seed2.clone(), seed.clone()];
+    let before = (snapshot(&seed), snapshot(&seed2));
+
+    let (st, proxy) = start_proxy(env.cfg.clone()).await;
+    let get = |f: &str| reqwest::get(format!("{proxy}/{ARCH_DIR}/{f}"));
+
+    // Valid seed file: served and cached without touching upstream.
+    let r = get(FOO).await.unwrap();
+    assert_eq!(r.bytes().await.unwrap(), foo);
+    assert_eq!(cached(&env.cfg, FOO).unwrap(), foo);
+    assert_eq!(env.good.hits(FOO) + env.good.hits(&format!("{FOO}.sig")), 0);
+    assert_eq!(
+        cached(&env.cfg, &format!("{FOO}.sig")).unwrap(),
+        fixture(&format!("{FOO}.sig"))
+    );
+
+    // Bad seed candidates are skipped and upstream is used.
+    for (f, want) in [(QUX, foo.clone()), (DROP, foo.clone()), (BAR, fixture(BAR))] {
+        let r = get(f).await.unwrap();
+        assert_eq!(r.bytes().await.unwrap(), want, "{f}");
+        assert_eq!(wait_cached(&env.cfg, f).await, want, "{f}");
+        assert_eq!(env.good.hits(f), 1, "{f} must come from upstream");
+    }
+
+    let s: serde_json::Value = reqwest::get(format!("{proxy}/status"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(s["seed_hits"], 1);
+    assert_eq!(s["seed_rejects"], 2, "truncated + wrong-bytes qux");
+    assert_eq!(
+        st.stats
+            .seed_rejects
+            .load(std::sync::atomic::Ordering::Relaxed),
+        2
+    );
+    assert_eq!(
+        (snapshot(&seed), snapshot(&seed2)),
+        before,
+        "seed dirs modified"
+    );
+    assert_no_empty_files(&env.cfg.cache_dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn seed_scan_imports_only_valid_current_packages() {
+    let mut env = env().await;
+    let seed = seed_env(&mut env);
+    let foo = fixture(FOO);
+    std::fs::write(seed.join(FOO), &foo).unwrap(); // valid, sig from upstream
+    std::fs::write(seed.join(QUX), &foo).unwrap(); // valid
+    std::fs::write(seed.join(DROP), &foo[..5000]).unwrap(); // truncated
+    std::fs::write(seed.join(BAR), fixture(BAR)).unwrap(); // valid but not current
+    std::fs::write(seed.join(format!("{QUX}.part")), &foo).unwrap();
+    let before = snapshot(&seed);
+
+    let (st, _proxy) = start_proxy(env.cfg.clone()).await;
+    pacoflexo::seed::scan(st.clone()).await;
+
+    assert_eq!(cached(&env.cfg, FOO).unwrap(), foo);
+    assert_eq!(cached(&env.cfg, QUX).unwrap(), foo);
+    assert!(cached(&env.cfg, DROP).is_none());
+    assert!(cached(&env.cfg, BAR).is_none());
+    assert_eq!(env.good.hits(FOO) + env.good.hits(QUX), 0);
+    assert_eq!(snapshot(&seed), before, "seed dir modified");
+    assert_no_empty_files(&env.cfg.cache_dir);
 }

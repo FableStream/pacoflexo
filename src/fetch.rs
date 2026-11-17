@@ -110,7 +110,7 @@ async fn body_to_tmp(st: &AppState, resp: reqwest::Response) -> Result<(PathBuf,
     }
 }
 
-async fn commit(tmp: &Path, dest: &Path) -> std::io::Result<()> {
+pub(crate) async fn commit(tmp: &Path, dest: &Path) -> std::io::Result<()> {
     if let Some(dir) = dest.parent() {
         tokio::fs::create_dir_all(dir).await?;
     }
@@ -298,7 +298,7 @@ pub async fn fetch_sig(
 }
 
 /// Writes `data` next to a cached package as `<file>.sig` (atomically).
-async fn write_sidecar(st: &AppState, pkg_path: &Path, data: &[u8]) {
+pub(crate) async fn write_sidecar(st: &AppState, pkg_path: &Path, data: &[u8]) {
     let mut name = pkg_path.as_os_str().to_owned();
     name.push(".sig");
     let dest = PathBuf::from(name);
@@ -394,6 +394,21 @@ enum Attempt {
 }
 
 async fn download_package(st: &AppState, t: &Target, tx: &watch::Sender<Progress>) -> DlState {
+    // Seed dirs first: a verified local copy saves the upstream download.
+    if !st.cfg.seed.dirs.is_empty()
+        && crate::seed::import(st, t).await
+        && let Ok(f) = std::fs::File::open(st.cache_path(t))
+        && let Ok(md) = f.metadata()
+    {
+        tx.send_modify(|p| {
+            p.generation = 1;
+            p.file = Some(Arc::new(f));
+            p.total = md.len();
+            p.written = md.len();
+            p.state = DlState::Done;
+        });
+        return DlState::Done;
+    }
     let expected = st.lookup(&t.repo, &t.arch, &t.file);
     let dest = st.cache_path(t);
     let mut generation = 0;

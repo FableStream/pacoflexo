@@ -23,6 +23,8 @@ pub struct Stats {
     pub verification_failures: AtomicU64,
     pub committed: AtomicU64,
     pub scrubbed: AtomicU64,
+    pub seed_hits: AtomicU64,
+    pub seed_rejects: AtomicU64,
 }
 
 impl Stats {

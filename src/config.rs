@@ -30,6 +30,7 @@ pub struct Config {
     pub verify: VerifyConfig,
     pub retention: RetentionConfig,
     pub prefetch: PrefetchConfig,
+    pub seed: SeedConfig,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -89,6 +90,18 @@ pub struct PrefetchConfig {
     pub max_age_days: u64,
 }
 
+/// Read-only directories (e.g. the host's /var/cache/pacman/pkg) consulted on
+/// a cache miss before going upstream. Files found there are verified like
+/// any download and copied into the cache; the directories are never written.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SeedConfig {
+    pub dirs: Vec<PathBuf>,
+    /// Import every verified current package from `dirs` once at startup
+    /// (in the background).
+    pub scan_on_start: bool,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -105,6 +118,7 @@ impl Default for Config {
             verify: VerifyConfig::default(),
             retention: RetentionConfig::default(),
             prefetch: PrefetchConfig::default(),
+            seed: SeedConfig::default(),
         }
     }
 }
@@ -171,6 +185,15 @@ impl Config {
         if self.cache_dir == Path::new("/var/cache/pacman/pkg") {
             return Err("cache_dir must not be pacman's own cache /var/cache/pacman/pkg".into());
         }
+        for d in &self.seed.dirs {
+            if d.starts_with(&self.cache_dir) || self.cache_dir.starts_with(d) {
+                return Err(format!(
+                    "seed dir {} must not overlap cache_dir {}",
+                    d.display(),
+                    self.cache_dir.display()
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -192,6 +215,18 @@ mod tests {
         let cfg: Config = toml::from_str("").unwrap();
         assert_eq!(cfg.db_ttl_secs, 60);
         assert_eq!(cfg.retention.keep_versions, 1);
+        cfg.validate().unwrap();
+    }
+
+    #[test]
+    fn seed_dir_must_not_overlap_cache() {
+        let cfg: Config =
+            toml::from_str("cache_dir = \"/var/cache/pacoflexo\"\n[seed]\ndirs = [\"/var/cache\"]")
+                .unwrap();
+        assert!(cfg.validate().is_err());
+        let cfg: Config =
+            toml::from_str("[seed]\ndirs = [\"/var/cache/pacman/pkg\"]\nscan_on_start = true")
+                .unwrap();
         cfg.validate().unwrap();
     }
 

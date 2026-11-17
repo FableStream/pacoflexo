@@ -1,6 +1,6 @@
 [package]
 name = "pacoflexo"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.88"
 description = "A verifying caching proxy for Arch Linux package repositories"
@@ -25,6 +25,7 @@ flate2 = "1.1.11"
 futures-util = "0.3.34"
 hex = "0.4.3"
 httpdate = "1.0.3"
+libc = "0.2.191"
 pgp = "0.21.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "stream", "json", "http2"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }

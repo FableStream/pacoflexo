@@ -112,6 +112,43 @@ On every `refresh_interval_secs`, pacoflexo:
 3. optionally prefetches: for every package a client requested in the last
    `max_age_days`, it downloads the current version if that isn't cached yet.
 
+### Seeding from an existing cache
+
+Most hosts that run pacoflexo already have a pacman cache full of packages.
+`[seed]` lets pacoflexo use those files instead of downloading them again:
+
+```toml
+[seed]
+dirs = ["/var/cache/pacman/pkg"]
+scan_on_start = true
+```
+
+On a cache miss, pacoflexo looks for the exact file name in each seed
+directory before it goes upstream. It ignores `*.part` files, temp names and
+0-byte files. A candidate is first copied into pacoflexo's own cache under a
+temp name, using a reflink where the filesystem supports one (btrfs, XFS),
+else a hardlink, else a plain copy. pacoflexo then verifies **the copy**
+exactly as it would verify a download: size and sha256 against the sync db,
+and the signature from `%PGPSIG%`, the seed directory's `.sig` or the mirror.
+Only then is the copy renamed into place. A seed file that fails is skipped
+and the package is fetched upstream as usual. With `scan_on_start`, a
+background task imports every verified current package from the seed
+directories once at startup, without delaying serving. `/status` reports
+`seed_hits` and `seed_rejects`.
+
+Seed directories are strictly **read-only** to pacoflexo. It never writes,
+renames or deletes anything in them, not even a file that fails verification,
+because they belong to someone else (usually pacman). That keeps the two caches
+independent: pacman can download, clean or partially write its cache at any
+time without affecting pacoflexo. The packaged systemd unit also marks
+`/var/cache/pacman/pkg` read-only, so the kernel enforces this.
+
+Tip: point the host's own pacman at pacoflexo as well
+(`Server = http://127.0.0.1:9129/repo/archlinux/$repo/os/$arch` at the top of
+`/etc/pacman.d/mirrorlist`). The host then benefits from the shared,
+verified cache, and new packages reach the LAN cache the first time the host
+upgrades.
+
 ## URL compatibility
 
 | Style | Client `Server =` line |
@@ -179,9 +216,11 @@ From source: `cargo build --release --locked`, then run
    `systemctl disable --now pacoloco flexo`.
 3. `systemctl enable --now pacoflexo`, then check `curl -s localhost:9129/status`.
 4. Clients need no changes: both URL styles keep working.
-5. pacoflexo starts with an empty cache in its own directory. You can remove
-   the old caches whenever you like. Don't point `cache_dir` at an existing
-   cache or at `/var/cache/pacman/pkg`.
+5. pacoflexo starts with an empty cache in its own directory. To reuse
+   packages that are already on the host, add the old cache directories to
+   `[seed] dirs`. They are only ever read, and every file is verified before
+   it is used. Don't point `cache_dir` at an existing cache or at
+   `/var/cache/pacman/pkg`.
 6. If you used pacoloco's prefetch, set `[prefetch] enabled = true`. Prefetch
    then follows what your clients request through pacoflexo from that point on.
 

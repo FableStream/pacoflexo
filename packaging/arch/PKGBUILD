@@ -6,7 +6,7 @@
 # `makepkg --printsrcinfo > .SRCINFO`.
 
 pkgname=pacoflexo
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Verifying caching proxy for Arch Linux package repositories (flexo + pacoloco in one)'
 arch=(x86_64 aarch64)
@@ -23,10 +23,10 @@ source=(
   config.toml
 )
 sha256sums=('SKIP'
-            '321dab0dbc3fe2ae4722b22d1cd578745a71cbc264f45d3c28db639e117e7118'
+            '875b314bbc31706047b14c6049437a126475e2e924cdce13812bce46e4fdd23b'
             '6ea4efb828c819a6b8f78cd7d04795ff1f1827bc56405e112946aae22ed5351d'
             'e32af498bbc8f215e92748e9de7c278fbd6d7c47fdd67aee7b436d5fe0b979bf'
-            '22067b0e612094db1da0104e15ec3fa64717f11ac5ecb0d8f13c156a5da08a1c')
+            '97b41dd7d685e5ec27f0c044c56bb106dc4ed6d680cc0ef440d022ffc6ecb205')
 
 prepare() {
   cd "${pkgname}-${pkgver}"

@@ -4,12 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.1] - 2026-11-17
 
 ### Added
 
+- Read-only seed directories (`[seed] dirs`, e.g. the host's
+  `/var/cache/pacman/pkg`): on a cache miss, a file with the exact name is
+  copied into the cache (reflink, else hardlink, else copy), verified like a
+  download (size, sha256, signature) and committed atomically. Seed
+  directories are never written to. Optional `scan_on_start` imports every
+  verified current package in the background. `seed_hits` and
+  `seed_rejects` in `/status`.
 - `packaging/arch/`: AUR-style PKGBUILD (GitHub release tarball), hardened
-  systemd unit, sysusers/tmpfiles entries and default config.
+  systemd unit (seed dir mounted read-only), sysusers/tmpfiles entries and
+  default config.
 
 ### Fixed
 

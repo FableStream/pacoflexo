@@ -55,3 +55,14 @@ unaccessed_days = 30
 # Download new versions of packages clients requested recently.
 enabled = false
 max_age_days = 30
+
+[seed]
+# Read-only directories checked on a cache miss before going upstream, e.g.
+# the host's own pacman cache. Files are verified exactly like downloads
+# (size + sha256 against the sync db, signature) and copied into cache_dir
+# (reflink, else hardlink, else copy). pacoflexo never writes, renames or
+# deletes anything in these directories. Default: none.
+dirs = ["/var/cache/pacman/pkg"]
+# Import every verified current package from dirs once at startup, in the
+# background.
+scan_on_start = false

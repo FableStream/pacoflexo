@@ -6,6 +6,7 @@ pub mod fetch;
 pub mod maintenance;
 pub mod mirrors;
 pub mod routes;
+pub mod seed;
 pub mod server;
 pub mod state;
 pub mod vercmp;
@@ -50,9 +51,12 @@ pub async fn startup(cfg: config::Config) -> Result<Arc<state::AppState>, String
     Ok(st)
 }
 
-/// Periodic db refresh, retention, prefetch, access-time persistence and
+/// Optional one-off seed scan, then periodic db refresh, retention, prefetch, access-time persistence and
 /// mirror re-ranking.
 pub fn spawn_background(st: Arc<state::AppState>) {
+    if st.cfg.seed.scan_on_start && !st.cfg.seed.dirs.is_empty() {
+        tokio::spawn(seed::scan(st.clone()));
+    }
     let s = st.clone();
     tokio::spawn(async move {
         let mut tick =
